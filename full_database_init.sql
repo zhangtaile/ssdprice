@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS skus (
     raw_capacity VARCHAR(100) NOT NULL,
     mpn VARCHAR(255) NOT NULL,
     pcba_mpn VARCHAR(255) NOT NULL,
+    indirect_cost_rate DECIMAL(15, 4) DEFAULT 0.012,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -137,6 +138,7 @@ CREATE TABLE IF NOT EXISTS sku_cost_snapshots (
     housing_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
     mva_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
     others_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
+    applied_indirect_rate DECIMAL(15, 4) DEFAULT 0.012,
     total_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
     params_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -41,6 +41,7 @@
 - `user_capacity`: 用户可用容量 (如 1.92TB)
 - `raw_capacity`: 物理原厂容量 (如 2048GB)
 - `form_factor`: 形态 (M.2, U.2 等)
+- `indirect_cost_rate`: **其它费率** (Default 0.012)，支持按 SKU 设置不同的核算比例。
 
 ### `bom_items` (BOM 明细)
 **多态关联表**，通过 `material_type` 路由至不同的物料表。
@@ -65,7 +66,8 @@
 - `snapshot_id`: 关联快照元数据
 - `sku_id`: 关联产品
 - `nand_cost / dram_cost ...`: 存储核算时的各分类子项总额。
-- `others_cost`: 1.2% 的间接费用。
+- `others_cost`: 最终核算得出“其它费用”的总额。
+- `applied_indirect_rate`: **核算时应用的费率** (如 0.012)，确保核算逻辑可回溯。
 - `total_cost`: 最终总成本。
 - **`params_snapshot` (JSONB)**: 
     - **极重要**: 以 JSON 数组形式存储当时 BOM 中所有物料的 `P/N`、`当时单价`、`损耗系数`和`子项成本`。
