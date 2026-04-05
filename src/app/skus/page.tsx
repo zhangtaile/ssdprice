@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Card, Breadcrumb, App, Tag } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, PartitionOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, Card, Breadcrumb, App, Tag, Statistic } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, PartitionOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
@@ -15,6 +15,8 @@ interface SKU {
   mpn: string;
   pcba_mpn: string;
   created_at: string;
+  // 扩展字段用于显示成本
+  calculated_cost?: number;
 }
 
 export default function SKUPage() {
@@ -25,6 +27,26 @@ export default function SKUPage() {
   const [form] = Form.useForm();
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const calculateSKUCost = async (skuId: string) => {
+    try {
+      const { data: bomItems } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
+      if (!bomItems || bomItems.length === 0) return 0;
+
+      let totalMaterialCost = 0;
+      for (const item of bomItems) {
+        const tableName = `materials_${item.material_type.toLowerCase()}`;
+        const { data: mat } = await supabase.from(tableName).select('price').eq('id', item.material_id).single();
+        if (mat) {
+          totalMaterialCost += mat.price * item.quantity * (1 + (item.selection_loss || 0));
+        }
+      }
+      // 加上 1.2% 的间接费用
+      return totalMaterialCost * 1.012;
+    } catch (err) {
+      return 0;
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     const { data: skuData, error } = await supabase
@@ -34,8 +56,13 @@ export default function SKUPage() {
 
     if (error) {
       message.error('获取数据失败: ' + error.message);
-    } else {
-      setData(skuData || []);
+    } else if (skuData) {
+      // 增强逻辑：为每个 SKU 计算实时成本
+      const enrichedData = await Promise.all(skuData.map(async (sku) => {
+        const cost = await calculateSKUCost(sku.id);
+        return { ...sku, calculated_cost: cost };
+      }));
+      setData(enrichedData);
     }
     setLoading(false);
   };
@@ -109,19 +136,17 @@ export default function SKUPage() {
       render: (text: string) => <span className="font-semibold text-blue-600">{text}</span>,
     },
     {
-      title: '成品 MPN',
-      dataIndex: 'mpn',
-      key: 'mpn',
-    },
-    {
       title: '容量 (User/Raw)',
       key: 'capacity',
       render: (_: any, record: SKU) => (
-        <Space>
-          <Tag color="blue">{record.user_capacity}</Tag>
-          <span className="text-gray-400">/</span>
-          <Tag color="default">{record.raw_capacity}</Tag>
-        </Space>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1">
+            <Tag color="blue">{record.user_capacity}</Tag>
+            <span className="text-gray-300">/</span>
+            <Tag color="default">{record.raw_capacity}</Tag>
+          </div>
+          <small className="text-gray-400">{record.mpn}</small>
+        </div>
       ),
     },
     {
@@ -130,9 +155,18 @@ export default function SKUPage() {
       key: 'form_factor',
     },
     {
-      title: 'PCBA MPN',
-      dataIndex: 'pcba_mpn',
-      key: 'pcba_mpn',
+      title: '实时估算成本 ($)',
+      dataIndex: 'calculated_cost',
+      key: 'calculated_cost',
+      sorter: (a: SKU, b: SKU) => (a.calculated_cost || 0) - (b.calculated_cost || 0),
+      render: (cost: number) => (
+        <div className="flex flex-col">
+          <span className={`font-bold text-lg ${cost > 0 ? 'text-orange-600' : 'text-gray-300'}`}>
+            ${cost ? cost.toFixed(4) : '0.0000'}
+          </span>
+          <small className="text-gray-400 text-xs">含 1.2% 辅料</small>
+        </div>
+      ),
     },
     {
       title: '操作',
@@ -158,22 +192,24 @@ export default function SKUPage() {
   return (
     <div>
       <Breadcrumb 
-        style={{ marginBottom: 16 }} 
+        style={{ marginBottom: 16 }}
         items={[
-          { title: '首页' },
+          { title: <Link href="/">首页</Link> },
           { title: '产品 SKU 管理' },
         ]}
       />
 
-      <Card 
-        title="产品 SKU 列表" 
-        variant="borderless"
-        extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()}>
-            新增 SKU
-          </Button>
-        }
-      >
+      <div className="flex justify-between items-end mb-4">
+        <div>
+          <h2 className="text-xl font-bold mb-1">产品 SKU 列表</h2>
+          <p className="text-gray-500 text-sm">管理 SSD 成品型号及其基于 BOM 的实时核算成本。</p>
+        </div>
+        <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => showModal()}>
+          新增 SKU
+        </Button>
+      </div>
+
+      <Card variant="borderless" className="shadow-sm">
         <Table 
           columns={columns} 
           dataSource={data} 

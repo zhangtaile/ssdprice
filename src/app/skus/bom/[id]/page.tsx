@@ -13,9 +13,11 @@ interface BOMItem {
   material_id: string;
   quantity: number;
   selection_loss: number;
-  // 扩展字段用于显示
+  // 扩展字段用于显示与计算
   material_pn?: string;
   material_name?: string;
+  material_price?: number;
+  item_cost?: number;
 }
 
 interface SKU {
@@ -34,7 +36,6 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   
-  // 用于下拉框的候选物料
   const [materialOptions, setMaterialOptions] = useState<{ id: string, pn: string, supplier: string }[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
 
@@ -50,22 +51,25 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. 获取 SKU 信息
       const { data: skuData } = await supabase.from('skus').select('*').eq('id', skuId).single();
       setSku(skuData);
 
-      // 2. 获取 BOM Items
       const { data: items } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
       
       if (items) {
-        // 3. 这里的物料信息需要根据类型跨表查询，为了简单起见，我们并行获取这些信息
         const resolvedItems = await Promise.all(items.map(async (item) => {
           const tableName = `materials_${item.material_type.toLowerCase()}`;
-          const { data: mat } = await supabase.from(tableName).select('pn, supplier').eq('id', item.material_id).single();
+          const { data: mat } = await supabase.from(tableName).select('pn, supplier, price').eq('id', item.material_id).single();
+          
+          const price = mat?.price || 0;
+          const item_cost = price * item.quantity * (1 + (item.selection_loss || 0));
+
           return {
             ...item,
             material_pn: mat?.pn || 'Unknown',
-            material_name: mat?.supplier || 'Unknown'
+            material_name: mat?.supplier || 'Unknown',
+            material_price: price,
+            item_cost: item_cost
           };
         }));
         setBomItems(resolvedItems);
@@ -81,7 +85,6 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     fetchData();
   }, [skuId]);
 
-  // 当选择物料类型变化时，加载对应的物料列表
   const handleTypeChange = async (type: string) => {
     setOptionsLoading(true);
     form.setFieldValue('material_id', undefined);
@@ -138,6 +141,10 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     });
   };
 
+  const totalMaterialCost = bomItems.reduce((sum, item) => sum + (item.item_cost || 0), 0);
+  const indirectCost = totalMaterialCost * 0.012;
+  const finalTotalCost = totalMaterialCost + indirectCost;
+
   const columns = [
     {
       title: '物料类型',
@@ -149,19 +156,31 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       title: 'P/N (供应商)',
       key: 'material',
       render: (_: any, record: BOMItem) => (
-        <span>{record.material_pn} <small className="text-gray-400">({record.material_name})</small></span>
+        <div>
+          <div className="font-medium text-blue-600">{record.material_pn}</div>
+          <div className="text-gray-400 text-xs">{record.material_name}</div>
+        </div>
       ),
     },
     {
-      title: '用量 (Qty)',
-      dataIndex: 'quantity',
-      key: 'quantity',
+      title: '实时单价 ($)',
+      dataIndex: 'material_price',
+      key: 'material_price',
+      render: (val: number) => `$${val?.toFixed(4)}`,
     },
     {
-      title: '筛选损耗 (%)',
-      dataIndex: 'selection_loss',
-      key: 'selection_loss',
-      render: (val: number) => val > 0 ? `${(val * 100).toFixed(2)}%` : '-',
+      title: '用量 / 损耗',
+      key: 'qty_loss',
+      render: (_: any, record: BOMItem) => (
+        <span>{record.quantity} <small className="text-gray-400">/ {((record.selection_loss || 0) * 100).toFixed(1)}%</small></span>
+      ),
+    },
+    {
+      title: '子项成本 ($)',
+      dataIndex: 'item_cost',
+      key: 'item_cost',
+      className: 'font-semibold',
+      render: (val: number) => `$${val?.toFixed(4)}`,
     },
     {
       title: '操作',
@@ -181,7 +200,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         items={[
           { title: <Link href="/">首页</Link> },
           { title: <Link href="/skus">产品 SKU 管理</Link> },
-          { title: '配置 BOM' },
+          { title: 'BOM 配置与核算' },
         ]}
       />
 
@@ -192,19 +211,20 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       </div>
 
       <Card variant="borderless" className="mb-6 shadow-sm">
-        <Descriptions title="当前产品画像" bordered size="small">
+        <Descriptions title="产品基础画像" bordered size="small">
           <Descriptions.Item label="Code Name">{sku?.code_name}</Descriptions.Item>
           <Descriptions.Item label="成品 MPN">{sku?.mpn}</Descriptions.Item>
-          <Descriptions.Item label="容量">{sku?.user_capacity}</Descriptions.Item>
+          <Descriptions.Item label="用户容量">{sku?.user_capacity}</Descriptions.Item>
         </Descriptions>
       </Card>
 
       <Card 
-        title="BOM 清单明细" 
+        title="BOM 组装与实时核算" 
         variant="borderless"
+        className="shadow-sm"
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={showModal}>
-            添加物料组件
+            添加组件
           </Button>
         }
       >
@@ -214,13 +234,49 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           rowKey="id" 
           loading={loading}
           pagination={false}
+          summary={() => (
+            <Table.Summary fixed>
+              <Table.Summary.Row className="bg-blue-50/50">
+                <Table.Summary.Cell index={0} colSpan={4} className="text-right font-bold">
+                  原材料成本合计 (Sum of Materials):
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} className="font-bold text-blue-600">
+                  ${totalMaterialCost.toFixed(4)}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={2} />
+              </Table.Summary.Row>
+              <Table.Summary.Row className="bg-gray-50/50">
+                <Table.Summary.Cell index={0} colSpan={4} className="text-right text-gray-500">
+                  间接费用/加工损耗 (Others 1.2%):
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} className="text-gray-500">
+                  ${indirectCost.toFixed(4)}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={2} />
+              </Table.Summary.Row>
+              <Table.Summary.Row className="bg-orange-50/50">
+                <Table.Summary.Cell index={0} colSpan={4} className="text-right font-bold text-lg">
+                  最终核算总成本 (Final Total Cost):
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} className="font-bold text-orange-600 text-lg underline decoration-double">
+                  ${finalTotalCost.toFixed(4)}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={2} />
+              </Table.Summary.Row>
+            </Table.Summary>
+          )}
         />
         
-        <div className="mt-6 p-4 bg-gray-50 rounded text-right">
-          <p className="text-gray-500 mb-2">提示：BOM 组装完成后，系统将根据物料库实时单价自动计算总成本。</p>
-          <Button type="primary" size="large" icon={<SaveOutlined />} disabled={bomItems.length === 0}>
-            保存并预览计算结果
-          </Button>
+        <div className="mt-8 flex justify-between items-center p-4 border-t border-dashed">
+          <span className="text-gray-400 text-sm italic">
+            * 成本基于物料库当前单价实时刷新。
+          </span>
+          <Space>
+            <Button size="large">导出清单</Button>
+            <Button type="primary" size="large" icon={<SaveOutlined />}>
+              固化当前核算快照
+            </Button>
+          </Space>
         </div>
       </Card>
 
