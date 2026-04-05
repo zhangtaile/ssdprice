@@ -125,8 +125,8 @@ export default function SnapshotsPage() {
                     <Table 
                       size="small"
                       pagination={false}
-                      dataSource={skuSnap.params_snapshot}
-                      rowKey={(record) => `${record.type}-${record.pn}`}
+                      dataSource={skuSnap.params_snapshot as any[]}
+                      rowKey={(record: any) => `${record.type}-${record.pn}`}
                       columns={[
                         { title: '类型', dataIndex: 'type', key: 'type' },
                         { title: 'P/N', dataIndex: 'pn', key: 'pn' },
