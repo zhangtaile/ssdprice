@@ -15,6 +15,7 @@ interface SKU {
   mpn: string;
   pcba_mpn: string;
   created_at: string;
+  indirect_cost_rate?: number;
   // 扩展字段用于显示成本
   calculated_cost?: number;
 }
@@ -27,23 +28,34 @@ export default function SKUPage() {
   const [form] = Form.useForm();
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const calculateSKUCost = async (skuId: string) => {
-    try {
-      // 获取 SKU 的自定义费率 (默认 0.012)
-      const { data: skuData } = await supabase.from('skus').select('indirect_cost_rate').eq('id', skuId).single();
-      const rate = skuData?.indirect_cost_rate ?? 0.012;
+  // 内存缓存：记录物料价格的请求状态（Promise），完美拦截瞬间发起的并发重复请求
+  const materialPriceCache = React.useRef(new Map<string, Promise<number>>());
 
-      const { data: bomItems } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
+  const calculateSKUCost = async (sku: SKU) => {
+    try {
+      const rate = sku.indirect_cost_rate ?? 0.012;
+
+      const { data: bomItems } = await supabase.from('bom_items').select('*').eq('sku_id', sku.id);
       if (!bomItems || bomItems.length === 0) return 0;
 
-      let totalMaterialCost = 0;
-      for (const item of bomItems) {
-        const tableName = `materials_${item.material_type.toLowerCase()}`;
-        const { data: mat } = await supabase.from(tableName).select('price').eq('id', item.material_id).single();
-        if (mat) {
-          totalMaterialCost += mat.price * item.quantity * (1 + (item.selection_loss || 0));
+      // 并发请求所有物料并使用 Promise 缓存机制
+      const materialCosts = await Promise.all(bomItems.map(async (item) => {
+        const cacheKey = `${item.material_type}_${item.material_id}`;
+        let pricePromise = materialPriceCache.current.get(cacheKey);
+
+        if (!pricePromise) {
+          const tableName = `materials_${item.material_type.toLowerCase()}`;
+          pricePromise = supabase.from(tableName).select('price').eq('id', item.material_id).single()
+            .then(({ data }) => data?.price || 0);
+          materialPriceCache.current.set(cacheKey, pricePromise);
         }
-      }
+
+        const price = await pricePromise;
+        return price * item.quantity * (1 + (item.selection_loss || 0));
+      }));
+
+      const totalMaterialCost = materialCosts.reduce((sum, cost) => sum + cost, 0);
+
       // 使用动态费率计算 (1 + rate)
       return totalMaterialCost * (1 + rate);
     } catch (err) {
@@ -53,6 +65,8 @@ export default function SKUPage() {
 
   const fetchData = async () => {
     setLoading(true);
+    materialPriceCache.current.clear(); // 刷新数据时清空缓存，获取最新报价
+
     const { data: skuData, error } = await supabase
       .from('skus')
       .select('*')
@@ -63,7 +77,7 @@ export default function SKUPage() {
     } else if (skuData) {
       // 增强逻辑：为每个 SKU 计算实时成本
       const enrichedData = await Promise.all(skuData.map(async (sku) => {
-        const cost = await calculateSKUCost(sku.id);
+        const cost = await calculateSKUCost(sku);
         return { ...sku, calculated_cost: cost };
       }));
       setData(enrichedData);
