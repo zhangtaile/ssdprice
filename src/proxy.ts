@@ -8,16 +8,23 @@ import type { NextRequest } from 'next/server';
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. 如果访问的是登录页或 API 路由，直接放行
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth')) {
+  // 1. 明确放行内部资源、登录页、API 及公共静态文件，防止无限重定向
+  if (
+    pathname.startsWith('/_next') || 
+    pathname.startsWith('/static') || 
+    pathname.startsWith('/login') || 
+    pathname.startsWith('/api') || 
+    pathname === '/favicon.ico'
+  ) {
     return NextResponse.next();
   }
 
   // 2. 检查 Cookie 中是否有访问令牌
   const accessToken = request.cookies.get('app_access_token');
 
-  // 3. 如果没有令牌，则重定向到登录页
+  // 3. 校验逻辑逻辑改进：处理 undefined 并统一验证逻辑
   if (!accessToken || accessToken.value !== 'memblaze_verified') {
+    // 为避免死循环，只有当不在登录页时才跳转到登录
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }

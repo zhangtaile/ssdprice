@@ -24,8 +24,8 @@ export default function LoginPage() {
 
       if (res.ok) {
         message.success('登录成功，欢迎使用 SSD 成本核算系统');
-        // 后端 API 会设置 Cookie，这里直接跳转
-        router.push('/');
+        // 使用 window.location.href 强制刷新页面，确保中间件能识别到刚设置的 Cookie
+        window.location.href = '/';
       } else {
         message.error('访问密码错误，请重试');
       }
