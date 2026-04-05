@@ -49,7 +49,7 @@
 - `material_type`: 对应物料分类枚举
 - `material_id`: 对应物料表中的 UUID (注意：由于是跨表关联，此处无硬性 FK)
 - `quantity`: 用量 (Qty)
-- `selection_loss`: 筛选损耗 (例如 DRAM 的 0.075)
+- `selection_loss`: 筛选损耗 (适用于所有组件，如 DRAM、NAND 等，默认为 0)
 
 ---
 

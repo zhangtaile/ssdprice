@@ -64,14 +64,38 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         setIndirectRate(skuData.indirect_cost_rate);
       }
 
-      const { data: items } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
+      // 1. 获取所有 BOM 基础条目
+      const { data: items, error: itemsError } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
+      if (itemsError) throw itemsError;
       
-      if (items) {
-        const resolvedItems = await Promise.all(items.map(async (item) => {
-          const tableName = `materials_${item.material_type.toLowerCase()}`;
-          const { data: mat } = await supabase.from(tableName).select('pn, supplier, price').eq('id', item.material_id).single();
+      if (items && items.length > 0) {
+        // 2. 按物料类型分组 ID
+        const groups: Record<string, string[]> = {};
+        items.forEach(item => {
+          if (!groups[item.material_type]) groups[item.material_type] = [];
+          groups[item.material_type].push(item.material_id);
+        });
+
+        // 3. 针对每种物料类型，发起一次批量查询 (最多 6 次查询)
+        const materialDataMap: Record<string, any> = {};
+        await Promise.all(Object.keys(groups).map(async (type) => {
+          const tableName = `materials_${type.toLowerCase()}`;
+          const { data: materials } = await supabase
+            .from(tableName)
+            .select('id, pn, supplier, price')
+            .in('id', groups[type]);
           
+          materials?.forEach(m => {
+            materialDataMap[`${type}_${m.id}`] = m;
+          });
+        }));
+
+        // 4. 组装最终数据并计算成本
+        const resolvedItems = items.map(item => {
+          const mat = materialDataMap[`${item.material_type}_${item.material_id}`];
           const price = mat?.price || 0;
+          
+          // 恢复全局逻辑：所有物料均应用其填写的损耗率
           const item_cost = price * item.quantity * (1 + (item.selection_loss || 0));
 
           return {
@@ -81,9 +105,11 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
             material_price: price,
             item_cost: item_cost
           };
-        }));
-        // 按添加顺序或类型排序可选
+        });
+
         setBomItems(resolvedItems);
+      } else {
+        setBomItems([]);
       }
     } catch (err: any) {
       message.error('加载失败: ' + err.message);

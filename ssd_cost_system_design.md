@@ -94,7 +94,7 @@
 | `material_type` | enum | **物料所属分类** (DRAM, NAND, Controller, PCBA, Housing, MVA) |
 | `material_id` | uuid | 关联对应原材料表的主键 id |
 | `quantity` | decimal | 数量 (Usage) |
-| `selection_loss` | decimal | **筛选损耗率** (仅针对 DRAM 录入, 初始值 0.075) |
+| `selection_loss` | decimal | **筛选损耗率** (适用于所有物料类型, 初始值可设为 0) |
 
 ---
 
@@ -103,10 +103,9 @@
 系统在计算单个 SKU 总成本时，严格遵循以下公式：
 
 ### 3.1 关键项计算
-1.  **NAND 成本** = `NAND 单颗价格 * 数量`
-2.  **DRAM 成本** = `DRAM 单价 * 数量 * (1 + 筛选损耗)` 
-    *   *注：筛选损耗初始值为 7.5% (0.075)*
-3.  **其他直材成本** = `(主控价格 + PCBA 价格 + 外壳价格 + MVA 价格) * 对应数量`
+1.  **分项成本** = `物料价格 * 数量 * (1 + 筛选损耗)`
+    *   *注：筛选损耗可应用于 NAND, DRAM, 主控, PCBA, 外壳, MVA 等所有物料。*
+2.  **直材成本合计** = `Σ(分项成本)`
 
 ### 3.2 间接费用与汇总
 4.  **间接费用 (Others)** = `(NAND 成本 + DRAM 成本 + 主控成本 + PCBA 成本 + 外壳成本 + MVA 成本) * 1.2%`
