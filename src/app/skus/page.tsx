@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, Card, Breadcrumb, App, Tag, Statistic } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, PartitionOutlined, CalculatorOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, PartitionOutlined, CalculatorOutlined, DownloadOutlined } from '@ant-design/icons';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
@@ -224,9 +224,48 @@ export default function SKUPage() {
           <h2 className="text-xl font-bold mb-1">产品 SKU 列表</h2>
           <p className="text-gray-500 text-sm">管理 SSD 成品型号及其基于 BOM 的实时核算成本。</p>
         </div>
-        <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => showModal()}>
-          新增 SKU
-        </Button>
+        <Space>
+          <Button 
+            size="large" 
+            icon={<DownloadOutlined />} 
+            onClick={() => {
+              if (data.length === 0) {
+                message.warning('没有可导出的数据');
+                return;
+              }
+              const headers = ['内部代号 (Code Name)', '用户容量', '物理容量', '成品 MPN', 'PCBA MPN', '外形尺寸', '实时估算成本 ($)'];
+              const rows = data.map(sku => [
+                sku.code_name,
+                sku.user_capacity,
+                sku.raw_capacity,
+                sku.mpn,
+                sku.pcba_mpn,
+                sku.form_factor,
+                sku.calculated_cost ? sku.calculated_cost.toFixed(4) : '0.0000'
+              ]);
+              const csvContent = '\uFEFF' + [
+                headers.join(','),
+                ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+              ].join('\n');
+              
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', `SSD_SKU_Cost_Export_${new Date().toISOString().split('T')[0]}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              message.success('导出清单成功');
+            }} 
+            disabled={data.length === 0}
+          >
+            导出 Excel 清单
+          </Button>
+          <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => showModal()}>
+            新增 SKU
+          </Button>
+        </Space>
       </div>
 
       <Card variant="borderless" className="shadow-sm">
