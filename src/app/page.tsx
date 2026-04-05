@@ -1,5 +1,6 @@
 import { Card, Row, Col, Statistic } from 'antd';
 import { DatabaseOutlined, ProductOutlined, HistoryOutlined } from '@ant-design/icons';
+import Link from 'next/link';
 
 export default function Home() {
   return (
@@ -24,14 +25,16 @@ export default function Home() {
           </Card>
         </Col>
         <Col span={8}>
-          <Card variant="borderless" className="shadow-sm hover:shadow-md transition-shadow">
-            <Statistic
-              title="活跃 SKU"
-              value={0}
-              suffix="个"
-              prefix={<ProductOutlined className="text-green-500 mr-2" />}
-            />
-          </Card>
+          <Link href="/skus">
+            <Card variant="borderless" className="shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+              <Statistic
+                title="活跃 SKU"
+                value={0}
+                suffix="个"
+                prefix={<ProductOutlined className="text-green-500 mr-2" />}
+              />
+            </Card>
+          </Link>
         </Col>
         <Col span={8}>
           <Card variant="borderless" className="shadow-sm hover:shadow-md transition-shadow">
