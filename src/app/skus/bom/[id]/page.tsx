@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import { Table, Button, Space, Modal, Form, InputNumber, Select, Card, Breadcrumb, App, Tag, Descriptions, Input } from 'antd';
-import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined, SaveOutlined, HistoryOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined, SaveOutlined, HistoryOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -36,6 +36,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   const [bomItems, setBomItems] = useState<BOMItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isSnapshotModalVisible, setIsSnapshotModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [snapshotForm] = Form.useForm();
@@ -76,6 +77,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
             item_cost: item_cost
           };
         }));
+        // 按添加顺序或类型排序可选
         setBomItems(resolvedItems);
       }
     } catch (err: any) {
@@ -89,9 +91,11 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     fetchData();
   }, [skuId]);
 
-  const handleTypeChange = async (type: string) => {
+  const handleTypeChange = async (type: string, keepMaterialId = false) => {
     setOptionsLoading(true);
-    form.setFieldValue('material_id', undefined);
+    if (!keepMaterialId) {
+      form.setFieldValue('material_id', undefined);
+    }
     const tableName = `materials_${type.toLowerCase()}`;
     const { data, error } = await supabase.from(tableName).select('id, pn, supplier');
     if (!error) {
@@ -100,29 +104,56 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     setOptionsLoading(false);
   };
 
-  const showModal = () => {
+  const showAddModal = () => {
     form.resetFields();
+    setEditingItemId(null);
     setMaterialOptions([]);
     setIsModalVisible(true);
   };
 
-  const handleAddBOM = async () => {
+  const showEditModal = async (record: BOMItem) => {
+    setEditingItemId(record.id);
+    form.setFieldsValue({
+      material_type: record.material_type,
+      material_id: record.material_id,
+      quantity: record.quantity,
+      selection_loss: record.selection_loss || 0
+    });
+    // 加载选项并保留已选中的 material_id
+    await handleTypeChange(record.material_type, true);
+    setIsModalVisible(true);
+  };
+
+  const handleSaveBOM = async () => {
     try {
       const values = await form.validateFields();
       setLoading(true);
       
-      const { error } = await supabase.from('bom_items').insert([{
-        sku_id: skuId,
-        material_type: values.material_type,
-        material_id: values.material_id,
-        quantity: values.quantity,
-        selection_loss: values.selection_loss || 0
-      }]);
+      if (editingItemId) {
+        const { error } = await supabase.from('bom_items').update({
+          material_type: values.material_type,
+          material_id: values.material_id,
+          quantity: values.quantity,
+          selection_loss: values.selection_loss || 0
+        }).eq('id', editingItemId);
+        
+        if (error) throw error;
+        message.success('更新物料成功');
+      } else {
+        const { error } = await supabase.from('bom_items').insert([{
+          sku_id: skuId,
+          material_type: values.material_type,
+          material_id: values.material_id,
+          quantity: values.quantity,
+          selection_loss: values.selection_loss || 0
+        }]);
 
-      if (error) throw error;
-      
-      message.success('添加物料成功');
+        if (error) throw error;
+        message.success('添加物料成功');
+      }
+
       setIsModalVisible(false);
+      setEditingItemId(null);
       fetchData();
     } catch (err: any) {
       message.error('保存失败: ' + err.message);
@@ -257,9 +288,14 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       title: '操作',
       key: 'action',
       render: (_: any, record: BOMItem) => (
-        <Button danger type="text" icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-          移除
-        </Button>
+        <Space>
+          <Button type="text" className="text-blue-500" icon={<EditOutlined />} onClick={() => showEditModal(record)}>
+            编辑
+          </Button>
+          <Button danger type="text" icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+            移除
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -294,7 +330,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         variant="borderless"
         className="shadow-sm"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={showModal}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={showAddModal}>
             添加组件
           </Button>
         }
@@ -359,10 +395,13 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
 
       {/* 添加物料组件 Modal */}
       <Modal
-        title="添加 BOM 组件"
+        title={editingItemId ? "编辑 BOM 组件" : "添加 BOM 组件"}
         open={isModalVisible}
-        onOk={handleAddBOM}
-        onCancel={() => setIsModalVisible(false)}
+        onOk={handleSaveBOM}
+        onCancel={() => {
+          setIsModalVisible(false);
+          setEditingItemId(null);
+        }}
         confirmLoading={loading}
         width={500}
       >
