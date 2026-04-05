@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Card, Breadcrumb, Tabs } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, Card, Breadcrumb, Tabs, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '@/lib/supabase';
 
@@ -24,6 +24,7 @@ const typeConfig: Record<MaterialType, { label: string, table: string }> = {
 };
 
 export default function OthersPage() {
+  const { message, modal } = App.useApp();
   const [activeTab, setActiveTab] = useState<MaterialType>('controller');
   const [data, setData] = useState<OtherMaterial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +94,7 @@ export default function OthersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: `确认删除该${typeConfig[activeTab].label}?`,
       content: '删除后无法恢复',
       onOk: async () => {

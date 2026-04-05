@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Card, Breadcrumb } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, Card, Breadcrumb, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '@/lib/supabase';
 
@@ -18,6 +18,7 @@ interface NandMaterial {
 }
 
 export default function NandPage() {
+  const { message, modal } = App.useApp();
   const [data, setData] = useState<NandMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -104,7 +105,7 @@ export default function NandPage() {
   };
 
   const handleDelete = async (id: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除?',
       content: '删除后无法恢复',
       onOk: async () => {
