@@ -413,7 +413,11 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       >
         <Form form={form} layout="vertical" initialValues={{ quantity: 1, selection_loss: 0 }}>
           <Form.Item name="material_type" label="组件类型" rules={[{ required: true }]}>
-            <Select placeholder="选择类型" options={materialTypes} onChange={handleTypeChange} />
+            <Select 
+              placeholder="选择类型" 
+              options={materialTypes} 
+              onChange={(val) => handleTypeChange(val)} 
+            />
           </Form.Item>
           <Form.Item name="material_id" label="选择具体物料 (P/N)" rules={[{ required: true }]}>
             <Select placeholder="请先选择类型" loading={optionsLoading} showSearch optionFilterProp="label"
