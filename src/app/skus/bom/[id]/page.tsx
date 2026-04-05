@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, use } from 'react';
-import { Table, Button, Space, Modal, Form, InputNumber, Select, Card, Breadcrumb, App, Tag, Descriptions } from 'antd';
-import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, InputNumber, Select, Card, Breadcrumb, App, Tag, Descriptions, Input } from 'antd';
+import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined, SaveOutlined, HistoryOutlined } from '@ant-design/icons';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface BOMItem {
   id: string;
@@ -29,12 +30,15 @@ interface SKU {
 
 export default function BOMConfigPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: skuId } = use(params);
+  const router = useRouter();
   const { message, modal } = App.useApp();
   const [sku, setSku] = useState<SKU | null>(null);
   const [bomItems, setBomItems] = useState<BOMItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isSnapshotModalVisible, setIsSnapshotModalVisible] = useState(false);
   const [form] = Form.useForm();
+  const [snapshotForm] = Form.useForm();
   
   const [materialOptions, setMaterialOptions] = useState<{ id: string, pn: string, supplier: string }[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -144,6 +148,73 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   const totalMaterialCost = bomItems.reduce((sum, item) => sum + (item.item_cost || 0), 0);
   const indirectCost = totalMaterialCost * 0.012;
   const finalTotalCost = totalMaterialCost + indirectCost;
+
+  // 保存快照逻辑
+  const handleSaveSnapshot = async () => {
+    try {
+      const values = await snapshotForm.validateFields();
+      setLoading(true);
+
+      // 1. 创建快照主记录
+      const { data: snapshot, error: sError } = await supabase
+        .from('cost_snapshots')
+        .insert([{ 
+          label: values.label, 
+          description: values.description 
+        }])
+        .select()
+        .single();
+
+      if (sError) throw sError;
+
+      // 2. 准备子项分类成本
+      const costByCategory: Record<string, number> = {
+        NAND: 0, DRAM: 0, Controller: 0, PCBA: 0, Housing: 0, MVA: 0
+      };
+      
+      bomItems.forEach(item => {
+        costByCategory[item.material_type] += (item.item_cost || 0);
+      });
+
+      // 3. 固化当前参数到 JSONB
+      const paramsSnapshot = bomItems.map(item => ({
+        type: item.material_type,
+        pn: item.material_pn,
+        supplier: item.material_name,
+        price_at_moment: item.material_price,
+        qty: item.quantity,
+        loss: item.selection_loss,
+        sub_cost: item.item_cost
+      }));
+
+      // 4. 创建 SKU 关联快照详情
+      const { error: dError } = await supabase
+        .from('sku_cost_snapshots')
+        .insert([{
+          snapshot_id: snapshot.id,
+          sku_id: skuId,
+          nand_cost: costByCategory['NAND'],
+          dram_cost: costByCategory['DRAM'],
+          ctrl_cost: costByCategory['Controller'],
+          pcba_cost: costByCategory['PCBA'],
+          housing_cost: costByCategory['Housing'],
+          mva_cost: costByCategory['MVA'],
+          others_cost: indirectCost,
+          total_cost: finalTotalCost,
+          params_snapshot: paramsSnapshot
+        }]);
+
+      if (dError) throw dError;
+
+      message.success('快照固化成功，可在历史记录中查看');
+      setIsSnapshotModalVisible(false);
+      router.push('/snapshots');
+    } catch (err: any) {
+      message.error('固化失败: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const columns = [
     {
@@ -273,13 +344,20 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           </span>
           <Space>
             <Button size="large">导出清单</Button>
-            <Button type="primary" size="large" icon={<SaveOutlined />}>
+            <Button 
+              type="primary" 
+              size="large" 
+              icon={<SaveOutlined />}
+              onClick={() => setIsSnapshotModalVisible(true)}
+              disabled={bomItems.length === 0}
+            >
               固化当前核算快照
             </Button>
           </Space>
         </div>
       </Card>
 
+      {/* 添加物料组件 Modal */}
       <Modal
         title="添加 BOM 组件"
         open={isModalVisible}
@@ -289,55 +367,49 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         width={500}
       >
         <Form form={form} layout="vertical" initialValues={{ quantity: 1, selection_loss: 0 }}>
-          <Form.Item 
-            name="material_type" 
-            label="组件类型" 
-            rules={[{ required: true }]}
-          >
-            <Select 
-              placeholder="选择类型" 
-              options={materialTypes} 
-              onChange={handleTypeChange}
-            />
+          <Form.Item name="material_type" label="组件类型" rules={[{ required: true }]}>
+            <Select placeholder="选择类型" options={materialTypes} onChange={handleTypeChange} />
           </Form.Item>
-
-          <Form.Item 
-            name="material_id" 
-            label="选择具体物料 (P/N)" 
-            rules={[{ required: true }]}
-          >
-            <Select 
-              placeholder="请先选择类型" 
-              loading={optionsLoading}
-              showSearch
-              optionFilterProp="label"
-              options={materialOptions.map(m => ({ label: `${m.pn} (${m.supplier})`, value: m.id }))}
-            />
+          <Form.Item name="material_id" label="选择具体物料 (P/N)" rules={[{ required: true }]}>
+            <Select placeholder="请先选择类型" loading={optionsLoading} showSearch optionFilterProp="label"
+              options={materialOptions.map(m => ({ label: `${m.pn} (${m.supplier})`, value: m.id }))} />
           </Form.Item>
-
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item 
-              name="quantity" 
-              label="用量 (Qty)" 
-              rules={[{ required: true }]}
-            >
+            <Form.Item name="quantity" label="用量 (Qty)" rules={[{ required: true }]}>
               <InputNumber style={{ width: '100%' }} min={0.0001} />
             </Form.Item>
-
-            <Form.Item 
-              name="selection_loss" 
-              label="筛选损耗 (小数, 如 0.075)"
-            >
-              <InputNumber 
-                style={{ width: '100%' }} 
-                min={0} 
-                max={1} 
-                step={0.001} 
-                placeholder="例如 0.075"
-              />
+            <Form.Item name="selection_loss" label="筛选损耗 (小数)">
+              <InputNumber style={{ width: '100%' }} min={0} max={1} step={0.001} placeholder="例如 0.075" />
             </Form.Item>
           </div>
           <p className="text-gray-400 text-xs mt-[-10px]">注：DRAM 通常需要设置 7.5% (0.075) 的筛选损耗。</p>
+        </Form>
+      </Modal>
+
+      {/* 固化快照 Modal */}
+      <Modal
+        title={<span><HistoryOutlined className="mr-2 text-orange-500" /> 固化成本核算快照</span>}
+        open={isSnapshotModalVisible}
+        onOk={handleSaveSnapshot}
+        onCancel={() => setIsSnapshotModalVisible(false)}
+        confirmLoading={loading}
+        okText="确认固化"
+        cancelText="取消"
+      >
+        <div className="mb-4 p-3 bg-orange-50 text-orange-700 text-xs rounded border border-orange-100">
+          提示：固化快照将锁定当前物料清单、实时单价和核算结果。即使后续物料单价发生变化，快照数据也将保持不变。
+        </div>
+        <Form form={snapshotForm} layout="vertical" initialValues={{ label: `${sku?.code_name} - ${new Date().toLocaleDateString()} 成本核算` }}>
+          <Form.Item 
+            name="label" 
+            label="快照标签 (Label)" 
+            rules={[{ required: true, message: '请输入标签以便后续查找' }]}
+          >
+            <Input placeholder="例如：26CQ1-2月5号报价核算" />
+          </Form.Item>
+          <Form.Item name="description" label="备注说明">
+            <Input.TextArea placeholder="可选：填写本次核算的背景，如：基于 1.5$ 的 NAND 目标价试算" rows={3} />
+          </Form.Item>
         </Form>
       </Modal>
     </div>
