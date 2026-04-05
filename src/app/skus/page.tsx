@@ -31,11 +31,10 @@ export default function SKUPage() {
   // 内存缓存：记录物料价格的请求状态（Promise），完美拦截瞬间发起的并发重复请求
   const materialPriceCache = React.useRef(new Map<string, Promise<number>>());
 
-  const calculateSKUCost = async (sku: SKU) => {
+  const calculateSKUCost = async (sku: SKU, bomItems: any[]) => {
     try {
       const rate = sku.indirect_cost_rate ?? 0.012;
 
-      const { data: bomItems } = await supabase.from('bom_items').select('*').eq('sku_id', sku.id);
       if (!bomItems || bomItems.length === 0) return 0;
 
       // 并发请求所有物料并使用 Promise 缓存机制
@@ -67,18 +66,21 @@ export default function SKUPage() {
     setLoading(true);
     materialPriceCache.current.clear(); // 刷新数据时清空缓存，获取最新报价
 
+    // 一次性并联查出所有 SKU 及其下面的 BOM 明细，从根本上消灭 N 次单独的 BOM 查询
     const { data: skuData, error } = await supabase
       .from('skus')
-      .select('*')
+      .select('*, bom_items(*)')
       .order('created_at', { ascending: false });
 
     if (error) {
       message.error('获取数据失败: ' + error.message);
     } else if (skuData) {
       // 增强逻辑：为每个 SKU 计算实时成本
-      const enrichedData = await Promise.all(skuData.map(async (sku) => {
-        const cost = await calculateSKUCost(sku);
-        return { ...sku, calculated_cost: cost };
+      const enrichedData = await Promise.all(skuData.map(async (sku: any) => {
+        const cost = await calculateSKUCost(sku, sku.bom_items);
+        // 从返回状态中剔除大数组 bom_items，保持 React state 轻量化
+        const { bom_items, ...restSku } = sku;
+        return { ...restSku, calculated_cost: cost };
       }));
       setData(enrichedData);
     }
