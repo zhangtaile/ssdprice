@@ -135,10 +135,13 @@ export default function OthersPage() {
 
   return (
     <div>
-      <Breadcrumb style={{ marginBottom: 16 }}>
-        <Breadcrumb.Item>原材料管理</Breadcrumb.Item>
-        <Breadcrumb.Item>其他辅料</Breadcrumb.Item>
-      </Breadcrumb>
+      <Breadcrumb 
+        style={{ marginBottom: 16 }}
+        items={[
+          { title: '原材料管理' },
+          { title: '其他辅料' },
+        ]}
+      />
 
       <Card>
         <Tabs 

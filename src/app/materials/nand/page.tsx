@@ -141,10 +141,13 @@ export default function NandPage() {
 
   return (
     <div>
-      <Breadcrumb style={{ marginBottom: 16 }}>
-        <Breadcrumb.Item>原材料管理</Breadcrumb.Item>
-        <Breadcrumb.Item>NAND Flash</Breadcrumb.Item>
-      </Breadcrumb>
+      <Breadcrumb 
+        style={{ marginBottom: 16 }}
+        items={[
+          { title: '原材料管理' },
+          { title: 'NAND Flash' },
+        ]}
+      />
       
       <Card title="NAND 物料库" extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()}>

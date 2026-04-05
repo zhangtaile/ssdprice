@@ -10,7 +10,7 @@ const AntdRegistry = ({ children }: { children: React.ReactNode }) => {
   useServerInsertedHTML(() => (
     <script
       dangerouslySetInnerHTML={{
-        __html: `const style = ${JSON.stringify(extractStyle(cache))}; document.head.insertAdjacentHTML('beforeend', style);`,
+        __html: `{ const style = ${JSON.stringify(extractStyle(cache))}; document.head.insertAdjacentHTML('beforeend', style); }`,
       }}
     />
   ));
