@@ -44,8 +44,9 @@ export default function SKUPage() {
 
         if (!pricePromise) {
           const tableName = `materials_${item.material_type.toLowerCase()}`;
+          // 显式断言为 Promise<number> 以满足 TypeScript 类型要求
           pricePromise = supabase.from(tableName).select('price').eq('id', item.material_id).single()
-            .then(({ data }) => data?.price || 0);
+            .then(({ data }) => (data?.price || 0) as number) as Promise<number>;
           materialPriceCache.current.set(cacheKey, pricePromise);
         }
 
