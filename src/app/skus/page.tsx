@@ -29,6 +29,10 @@ export default function SKUPage() {
 
   const calculateSKUCost = async (skuId: string) => {
     try {
+      // 获取 SKU 的自定义费率 (默认 0.012)
+      const { data: skuData } = await supabase.from('skus').select('indirect_cost_rate').eq('id', skuId).single();
+      const rate = skuData?.indirect_cost_rate ?? 0.012;
+
       const { data: bomItems } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
       if (!bomItems || bomItems.length === 0) return 0;
 
@@ -40,8 +44,8 @@ export default function SKUPage() {
           totalMaterialCost += mat.price * item.quantity * (1 + (item.selection_loss || 0));
         }
       }
-      // 加上 1.2% 的间接费用
-      return totalMaterialCost * 1.012;
+      // 使用动态费率计算 (1 + rate)
+      return totalMaterialCost * (1 + rate);
     } catch (err) {
       return 0;
     }
@@ -164,7 +168,6 @@ export default function SKUPage() {
           <span className={`font-bold text-lg ${cost > 0 ? 'text-orange-600' : 'text-gray-300'}`}>
             ${cost ? cost.toFixed(4) : '0.0000'}
           </span>
-          <small className="text-gray-400 text-xs">含 1.2% 辅料</small>
         </div>
       ),
     },
