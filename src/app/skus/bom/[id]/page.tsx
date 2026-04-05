@@ -105,23 +105,29 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   };
 
   const showAddModal = () => {
-    form.resetFields();
     setEditingItemId(null);
     setMaterialOptions([]);
     setIsModalVisible(true);
+    // 使用 setTimeout 确保在 Modal 渲染后的下一帧执行，避免 Form 未连接的警告
+    setTimeout(() => {
+      form.resetFields();
+    }, 0);
   };
 
   const showEditModal = async (record: BOMItem) => {
     setEditingItemId(record.id);
+    setIsModalVisible(true);
+    
+    // 1. 先加载物料选项
+    await handleTypeChange(record.material_type, true);
+    
+    // 2. 确保在选项加载完成且 Modal 已打开后设置值
     form.setFieldsValue({
       material_type: record.material_type,
       material_id: record.material_id,
       quantity: record.quantity,
       selection_loss: record.selection_loss || 0
     });
-    // 加载选项并保留已选中的 material_id
-    await handleTypeChange(record.material_type, true);
-    setIsModalVisible(true);
   };
 
   const handleSaveBOM = async () => {
