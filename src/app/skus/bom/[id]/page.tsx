@@ -26,6 +26,7 @@ interface SKU {
   code_name: string;
   mpn: string;
   user_capacity: string;
+  indirect_cost_rate?: number;
 }
 
 export default function BOMConfigPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,6 +44,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   
   const [materialOptions, setMaterialOptions] = useState<{ id: string, pn: string, supplier: string }[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
+  const [indirectRate, setIndirectRate] = useState(0.012);
 
   const materialTypes = [
     { label: 'NAND Flash', value: 'NAND' },
@@ -58,6 +60,9 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     try {
       const { data: skuData } = await supabase.from('skus').select('*').eq('id', skuId).single();
       setSku(skuData);
+      if (skuData?.indirect_cost_rate !== undefined) {
+        setIndirectRate(skuData.indirect_cost_rate);
+      }
 
       const { data: items } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
       
@@ -183,8 +188,20 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   };
 
   const totalMaterialCost = bomItems.reduce((sum, item) => sum + (item.item_cost || 0), 0);
-  const indirectCost = totalMaterialCost * 0.012;
+  const indirectCost = totalMaterialCost * indirectRate;
   const finalTotalCost = totalMaterialCost + indirectCost;
+
+  const handleUpdateIndirectRate = async (val: number | null) => {
+    if (val === null) return;
+    try {
+      const { error } = await supabase.from('skus').update({ indirect_cost_rate: val }).eq('id', skuId);
+      if (error) throw error;
+      setIndirectRate(val);
+      message.success('间接费率已更新');
+    } catch (err: any) {
+      message.error('更新费率失败: ' + err.message);
+    }
+  };
 
   // 保存快照逻辑
   const handleSaveSnapshot = async () => {
@@ -238,6 +255,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           mva_cost: costByCategory['MVA'],
           others_cost: indirectCost,
           total_cost: finalTotalCost,
+          applied_indirect_rate: indirectRate,
           params_snapshot: paramsSnapshot
         }]);
 
@@ -328,6 +346,20 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           <Descriptions.Item label="Code Name">{sku?.code_name}</Descriptions.Item>
           <Descriptions.Item label="成品 MPN">{sku?.mpn}</Descriptions.Item>
           <Descriptions.Item label="用户容量">{sku?.user_capacity}</Descriptions.Item>
+          <Descriptions.Item label="其它费率 (Others %)">
+            <InputNumber 
+              value={indirectRate} 
+              step={0.001} 
+              min={0} 
+              max={1} 
+              formatter={value => `${(Number(value) * 100).toFixed(1)}%`}
+              parser={value => Number(value!.replace('%', '')) / 100}
+              onChange={handleUpdateIndirectRate}
+              style={{ width: 100 }}
+              size="small"
+            />
+            <small className="ml-2 text-gray-400">(点击数字可修改)</small>
+          </Descriptions.Item>
         </Descriptions>
       </Card>
 
@@ -360,7 +392,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
               </Table.Summary.Row>
               <Table.Summary.Row className="bg-gray-50/50">
                 <Table.Summary.Cell index={0} colSpan={4} className="text-right text-gray-500">
-                  间接费用/加工损耗 (Others 1.2%):
+                  其它费用 (Others {(indirectRate * 100).toFixed(1)}%):
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={1} className="text-gray-500">
                   ${indirectCost.toFixed(4)}
