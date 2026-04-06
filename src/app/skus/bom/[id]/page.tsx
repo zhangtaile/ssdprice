@@ -14,10 +14,12 @@ interface BOMItem {
   material_id: string;
   quantity: number;
   selection_loss: number;
+  selection_fee: number;
   // 扩展字段用于显示与计算
   material_pn?: string;
   material_name?: string;
   material_price?: number;
+  material_selection_fee?: number;
   item_cost?: number;
 }
 
@@ -80,9 +82,10 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         const materialDataMap: Record<string, any> = {};
         await Promise.all(Object.keys(groups).map(async (type) => {
           const tableName = `materials_${type.toLowerCase()}`;
+          const selectFields = type === 'DRAM' ? 'id, pn, supplier, price, selection_fee' : 'id, pn, supplier, price';
           const { data: materials } = await supabase
             .from(tableName)
-            .select('id, pn, supplier, price')
+            .select(selectFields)
             .in('id', groups[type]);
           
           materials?.forEach(m => {
@@ -94,15 +97,18 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         const resolvedItems = items.map(item => {
           const mat = materialDataMap[`${item.material_type}_${item.material_id}`];
           const price = mat?.price || 0;
+          const sFee = item.selection_fee || 0;
           
           // 恢复全局逻辑：所有物料均应用其填写的损耗率
-          const item_cost = price * item.quantity * (1 + (item.selection_loss || 0));
+          // 新公式: (单价 + 筛选费) * 用量 * (1 + 损耗)
+          const item_cost = (price + sFee) * item.quantity * (1 + (item.selection_loss || 0));
 
           return {
             ...item,
             material_pn: mat?.pn || 'Unknown',
             material_name: mat?.supplier || 'Unknown',
             material_price: price,
+            material_selection_fee: mat?.selection_fee || 0,
             item_cost: item_cost
           };
         });
@@ -125,14 +131,30 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
   const handleTypeChange = async (type: string, keepMaterialId = false) => {
     setOptionsLoading(true);
     if (!keepMaterialId) {
-      form.setFieldValue('material_id', undefined);
+      form.setFieldsValue({
+        material_id: undefined,
+        selection_fee: 0
+      });
     }
     const tableName = `materials_${type.toLowerCase()}`;
-    const { data, error } = await supabase.from(tableName).select('id, pn, supplier');
+    const selectFields = type === 'DRAM' ? 'id, pn, supplier, selection_fee' : 'id, pn, supplier';
+    const { data, error } = await supabase.from(tableName).select(selectFields);
     if (!error) {
       setMaterialOptions(data || []);
     }
     setOptionsLoading(false);
+  };
+
+  const handleMaterialChange = (materialId: string) => {
+    const type = form.getFieldValue('material_type');
+    if (type === 'DRAM') {
+      const selected = materialOptions.find(m => m.id === materialId) as any;
+      if (selected) {
+        form.setFieldValue('selection_fee', selected.selection_fee || 0);
+      }
+    } else {
+      form.setFieldValue('selection_fee', 0);
+    }
   };
 
   const showAddModal = () => {
@@ -157,7 +179,8 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       material_type: record.material_type,
       material_id: record.material_id,
       quantity: record.quantity,
-      selection_loss: record.selection_loss || 0
+      selection_loss: record.selection_loss || 0,
+      selection_fee: record.selection_fee || 0
     });
   };
 
@@ -171,7 +194,8 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           material_type: values.material_type,
           material_id: values.material_id,
           quantity: values.quantity,
-          selection_loss: values.selection_loss || 0
+          selection_loss: values.selection_loss || 0,
+          selection_fee: values.selection_fee || 0
         }).eq('id', editingItemId);
         
         if (error) throw error;
@@ -182,7 +206,8 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           material_type: values.material_type,
           material_id: values.material_id,
           quantity: values.quantity,
-          selection_loss: values.selection_loss || 0
+          selection_loss: values.selection_loss || 0,
+          selection_fee: values.selection_fee || 0
         }]);
 
         if (error) throw error;
@@ -262,6 +287,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         pn: item.material_pn,
         supplier: item.material_name,
         price_at_moment: item.material_price,
+        selection_fee: item.selection_fee,
         qty: item.quantity,
         loss: item.selection_loss,
         sub_cost: item.item_cost
@@ -315,10 +341,16 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       ),
     },
     {
-      title: '实时单价 ($)',
-      dataIndex: 'material_price',
-      key: 'material_price',
-      render: (val: number) => `$${val?.toFixed(4)}`,
+      title: '实时单价 / 筛选费',
+      key: 'price_fee',
+      render: (_: any, record: BOMItem) => (
+        <div>
+          <div>${record.material_price?.toFixed(4)}</div>
+          {record.selection_fee > 0 && (
+            <div className="text-orange-500 text-xs">筛选费: ${record.selection_fee.toFixed(4)}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: '用量 / 损耗',
@@ -469,7 +501,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         confirmLoading={loading}
         width={500}
       >
-        <Form form={form} layout="vertical" initialValues={{ quantity: 1, selection_loss: 0 }}>
+        <Form form={form} layout="vertical" initialValues={{ quantity: 1, selection_loss: 0, selection_fee: 0 }}>
           <Form.Item name="material_type" label="组件类型" rules={[{ required: true }]}>
             <Select 
               placeholder="选择类型" 
@@ -478,8 +510,14 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
             />
           </Form.Item>
           <Form.Item name="material_id" label="选择具体物料 (P/N)" rules={[{ required: true }]}>
-            <Select placeholder="请先选择类型" loading={optionsLoading} showSearch optionFilterProp="label"
-              options={materialOptions.map(m => ({ label: `${m.pn} (${m.supplier})`, value: m.id }))} />
+            <Select 
+              placeholder="请先选择类型" 
+              loading={optionsLoading} 
+              showSearch 
+              optionFilterProp="label"
+              onChange={handleMaterialChange}
+              options={materialOptions.map(m => ({ label: `${m.pn} (${m.supplier})`, value: m.id }))} 
+            />
           </Form.Item>
           <div className="grid grid-cols-2 gap-4">
             <Form.Item name="quantity" label="用量 (Qty)" rules={[{ required: true }]}>
@@ -489,6 +527,18 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
               <InputNumber style={{ width: '100%' }} min={0} max={1} step={0.001} placeholder="例如 0.075" />
             </Form.Item>
           </div>
+          <Form.Item 
+            noStyle 
+            shouldUpdate={(prev, curr) => prev.material_type !== curr.material_type}
+          >
+            {({ getFieldValue }) => 
+              getFieldValue('material_type') === 'DRAM' ? (
+                <Form.Item name="selection_fee" label="筛选费用 (单价加成 $)">
+                  <InputNumber style={{ width: '100%' }} min={0} step={0.0001} />
+                </Form.Item>
+              ) : null
+            }
+          </Form.Item>
           <p className="text-gray-400 text-xs mt-[-10px]">注：DRAM 通常需要设置 7.5% (0.075) 的筛选损耗。</p>
         </Form>
       </Modal>

@@ -13,6 +13,7 @@ interface DramMaterial {
   category_cap: string;
   bit_width: string;
   price: number;
+  selection_fee: number;
   created_at: string;
 }
 
@@ -106,6 +107,7 @@ export default function DramPage() {
     { title: '类别容量', dataIndex: 'category_cap', key: 'category_cap' },
     { title: '位宽', dataIndex: 'bit_width', key: 'bit_width' },
     { title: '单价 ($)', dataIndex: 'price', key: 'price', render: (val: number) => `$${val.toFixed(4)}` },
+    { title: '筛选费用 ($)', dataIndex: 'selection_fee', key: 'selection_fee', render: (val: number) => `$${(val || 0).toFixed(4)}` },
     {
       title: '操作',
       key: 'action',
@@ -167,9 +169,14 @@ export default function DramPage() {
               <Input placeholder="例如: x16" />
             </Form.Item>
           </div>
-          <Form.Item name="price" label="单价 ($)" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} step={0.0001} min={0} />
-          </Form.Item>
+          <div className="flex gap-4">
+            <Form.Item name="price" label="单价 ($)" className="flex-1" rules={[{ required: true }]}>
+              <InputNumber style={{ width: '100%' }} step={0.0001} min={0} />
+            </Form.Item>
+            <Form.Item name="selection_fee" label="筛选费用 ($)" className="flex-1">
+              <InputNumber style={{ width: '100%' }} step={0.0001} min={0} placeholder="0.0000" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
     </div>
