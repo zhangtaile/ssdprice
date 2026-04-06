@@ -29,6 +29,7 @@
 - **`materials_dram`**:
     - `category_cap`: 规格容量 (例如 8Gb)
     - `bit_width`: 位宽 (例如 x16)
+    - `selection_fee`: **筛选费 (DRAM 专属)**，用于存储该物料默认的筛选加成。
 
 ---
 
@@ -50,10 +51,17 @@
 - `material_id`: 对应物料表中的 UUID (注意：由于是跨表关联，此处无硬性 FK)
 - `quantity`: 用量 (Qty)
 - `selection_loss`: 筛选损耗 (适用于所有组件，如 DRAM、NAND 等，默认为 0)
+- `selection_fee`: **SKU 专用筛选费**，允许在特定 SKU 的 BOM 中覆盖 DRAM 的默认筛选费。
 
 ---
 
-## 4. 成本核算与历史追溯 (Snapshot System)
+## 4. 成本核算与性能优化 (Performance & Optimization)
+
+### `get_bom_with_materials(p_sku_id UUID)` (RPC 函数)
+**核心性能组件**。为了解决前端多次跨表查询导致的延时问题，系统封装了一个 PostgreSQL 存储过程。
+- **功能**: 通过 `UNION ALL` 将所有物料子表虚拟合并，并与 `bom_items` 执行单次 `LEFT JOIN`。
+- **收益**: 无论 BOM 有多少行，前端仅需发起 **1 次** 网络请求即可获取所有带 P/N、单价和筛选费的明细数据。
+- **类型安全性**: 在内部显式处理了枚举 (`material_category`) 与文本 (`TEXT`) 的类型转换。
 
 ### `cost_snapshots` (快照元数据)
 记录一次核算操作的概览。
