@@ -88,7 +88,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
             .select(selectFields as any)
             .in('id', groups[type]);
           
-          materials?.forEach(m => {
+          materials?.forEach((m: any) => {
             materialDataMap[`${type}_${m.id}`] = m;
           });
         }));
@@ -140,7 +140,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     const selectFields = type === 'DRAM' ? 'id, pn, supplier, selection_fee' : 'id, pn, supplier';
     const { data, error } = await supabase.from(tableName).select(selectFields as any);
     if (!error) {
-      setMaterialOptions(data || []);
+      setMaterialOptions((data as any[]) || []);
     }
     setOptionsLoading(false);
   };
