@@ -6,7 +6,7 @@
 
 -- 1. 创建枚举类型
 DO $$ BEGIN
-    CREATE TYPE material_category AS ENUM ('DRAM', 'NAND', 'Controller', 'PCBA', 'Housing', 'MVA');
+    CREATE TYPE material_category AS ENUM ('DRAM', 'NAND', 'Controller', 'PCBA', 'Housing', 'MVA', 'Whitelabel');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -87,6 +87,18 @@ CREATE TABLE IF NOT EXISTS materials_mva (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Whitelabel SSD (OEM)
+CREATE TABLE IF NOT EXISTS materials_whitelabel (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    inventory_code VARCHAR(255) NOT NULL,
+    pn VARCHAR(255) NOT NULL,
+    supplier VARCHAR(255) NOT NULL,
+    price DECIMAL(15, 4) NOT NULL DEFAULT 0,
+    rebrand_fee DECIMAL(15, 4) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 3. 产品 SKU 与 BOM 定义
 -- SKUs
 CREATE TABLE IF NOT EXISTS skus (
@@ -137,6 +149,7 @@ CREATE TABLE IF NOT EXISTS sku_cost_snapshots (
     pcba_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
     housing_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
     mva_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
+    whitelabel_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
     others_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
     applied_indirect_rate DECIMAL(15, 4) DEFAULT 0.012,
     total_cost DECIMAL(15, 4) NOT NULL DEFAULT 0,
@@ -152,6 +165,7 @@ ALTER TABLE materials_controller DISABLE ROW LEVEL SECURITY;
 ALTER TABLE materials_pcba DISABLE ROW LEVEL SECURITY;
 ALTER TABLE materials_housing DISABLE ROW LEVEL SECURITY;
 ALTER TABLE materials_mva DISABLE ROW LEVEL SECURITY;
+ALTER TABLE materials_whitelabel DISABLE ROW LEVEL SECURITY;
 ALTER TABLE skus DISABLE ROW LEVEL SECURITY;
 ALTER TABLE bom_items DISABLE ROW LEVEL SECURITY;
 ALTER TABLE cost_snapshots DISABLE ROW LEVEL SECURITY;

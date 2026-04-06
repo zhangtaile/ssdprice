@@ -112,6 +112,7 @@ export default function SnapshotsPage() {
               <Statistic title="总成本" value={skuSnap.total_cost} prefix="$" precision={4} valueStyle={{ color: '#cf1322' }} />
               <Statistic title="NAND 成本" value={skuSnap.nand_cost} prefix="$" precision={4} />
               <Statistic title="DRAM 成本" value={skuSnap.dram_cost} prefix="$" precision={4} />
+              <Statistic title="白牌 SSD 成本" value={skuSnap.whitelabel_cost || 0} prefix="$" precision={4} />
               <Statistic title="间接费用 (1.2%)" value={skuSnap.others_cost} prefix="$" precision={4} />
             </div>
             

@@ -51,7 +51,8 @@ export default function SKUPage() {
         }
 
         const price = await pricePromise;
-        return price * item.quantity * (1 + (item.selection_loss || 0));
+        const fee = Number(item.selection_fee) || 0;
+        return (price + fee) * item.quantity * (1 + (item.selection_loss || 0));
       }));
 
       const totalMaterialCost = materialCosts.reduce((sum, cost) => sum + cost, 0);

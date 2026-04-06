@@ -35,6 +35,7 @@ export default function Home() {
         { count: pcbaCount },
         { count: housingCount },
         { count: mvaCount },
+        { count: whitelabelCount },
         { count: skuCount },
         { count: snapshotCount }
       ] = await Promise.all([
@@ -44,12 +45,13 @@ export default function Home() {
         supabase.from('materials_pcba').select('*', { count: 'exact', head: true }),
         supabase.from('materials_housing').select('*', { count: 'exact', head: true }),
         supabase.from('materials_mva').select('*', { count: 'exact', head: true }),
+        supabase.from('materials_whitelabel').select('*', { count: 'exact', head: true }),
         supabase.from('skus').select('*', { count: 'exact', head: true }),
         supabase.from('cost_snapshots').select('*', { count: 'exact', head: true })
       ]);
 
       setStats({
-        materials: (nandCount || 0) + (dramCount || 0) + (ctrlCount || 0) + (pcbaCount || 0) + (housingCount || 0) + (mvaCount || 0),
+        materials: (nandCount || 0) + (dramCount || 0) + (ctrlCount || 0) + (pcbaCount || 0) + (housingCount || 0) + (mvaCount || 0) + (whitelabelCount || 0),
         skus: skuCount || 0,
         snapshots: snapshotCount || 0
       });

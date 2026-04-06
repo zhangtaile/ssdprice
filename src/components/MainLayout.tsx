@@ -23,6 +23,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       children: [
         { key: '/materials/nand', label: <Link href="/materials/nand">NAND Flash</Link> },
         { key: '/materials/dram', label: <Link href="/materials/dram">DRAM</Link> },
+        { key: '/materials/whitelabel', label: <Link href="/materials/whitelabel">白牌 SSD</Link> },
         { key: '/materials/others', label: <Link href="/materials/others">其他辅料</Link> },
       ]
     },

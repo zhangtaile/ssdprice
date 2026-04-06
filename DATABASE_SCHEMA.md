@@ -8,7 +8,7 @@
 
 ### `material_category`
 用于标识 BOM 组件的所属分类。
-- **值**: `DRAM`, `NAND`, `Controller`, `PCBA`, `Housing`, `MVA`
+- **值**: `DRAM`, `NAND`, `Controller`, `PCBA`, `Housing`, `MVA`, `Whitelabel`
 
 ---
 
@@ -30,6 +30,9 @@
     - `category_cap`: 规格容量 (例如 8Gb)
     - `bit_width`: 位宽 (例如 x16)
     - `selection_fee`: **筛选费 (DRAM 专属)**，用于存储该物料默认的筛选加成。
+- **`materials_whitelabel`**:
+    - **用途**: OEM 贴牌产品。
+    - `rebrand_fee`: **换标费/贴牌费**，用于存储 OEM 特有的附加成本。
 
 ---
 
@@ -74,6 +77,7 @@
 - `snapshot_id`: 关联快照元数据
 - `sku_id`: 关联产品
 - `nand_cost / dram_cost ...`: 存储核算时的各分类子项总额。
+- `whitelabel_cost`: **白牌 SSD 子项总额**。
 - `others_cost`: 最终核算得出“其它费用”的总额。
 - `applied_indirect_rate`: **核算时应用的费率** (如 0.012)，确保核算逻辑可回溯。
 - `total_cost`: 最终总成本。

@@ -55,6 +55,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     { label: 'PCBA', value: 'PCBA' },
     { label: '外壳 (Housing)', value: 'Housing' },
     { label: '加工费 (MVA)', value: 'MVA' },
+    { label: '白牌SSD (Whitelabel)', value: 'Whitelabel' },
   ];
 
   const fetchData = async () => {
@@ -110,8 +111,12 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       });
     }
     const tableName = `materials_${type.toLowerCase()}`;
-    const selectFields = type === 'DRAM' ? 'id, pn, supplier, selection_fee' : 'id, pn, supplier';
-    const { data, error } = await supabase.from(tableName).select(selectFields as any);
+    const selectFields = (type === 'DRAM' || type === 'Whitelabel') ? 'id, pn, supplier, selection_fee' : 'id, pn, supplier';
+    
+    // 映射：白牌 SSD 的 rebrand_fee 在数据库中，但在组件内我们统一使用 selection_fee
+    const finalSelect = type === 'Whitelabel' ? 'id, pn, supplier, selection_fee:rebrand_fee' : selectFields;
+
+    const { data, error } = await supabase.from(tableName).select(finalSelect as any);
     if (!error) {
       setMaterialOptions((data as any[]) || []);
     }
@@ -120,7 +125,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
 
   const handleMaterialChange = (materialId: string) => {
     const type = form.getFieldValue('material_type');
-    if (type === 'DRAM') {
+    if (type === 'DRAM' || type === 'Whitelabel') {
       const selected = materialOptions.find(m => m.id === materialId) as any;
       if (selected) {
         form.setFieldValue('selection_fee', selected.selection_fee || 0);
@@ -247,7 +252,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
 
       // 2. 准备子项分类成本
       const costByCategory: Record<string, number> = {
-        NAND: 0, DRAM: 0, Controller: 0, PCBA: 0, Housing: 0, MVA: 0
+        NAND: 0, DRAM: 0, Controller: 0, PCBA: 0, Housing: 0, MVA: 0, Whitelabel: 0
       };
       
       bomItems.forEach(item => {
@@ -278,6 +283,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           pcba_cost: costByCategory['PCBA'],
           housing_cost: costByCategory['Housing'],
           mva_cost: costByCategory['MVA'],
+          whitelabel_cost: costByCategory['Whitelabel'],
           others_cost: indirectCost,
           total_cost: finalTotalCost,
           applied_indirect_rate: indirectRate,
@@ -314,13 +320,15 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
       ),
     },
     {
-      title: '实时单价 / 筛选费',
+      title: '实时单价 / (筛选/换标费)',
       key: 'price_fee',
       render: (_: any, record: BOMItem) => (
         <div>
           <div>${record.material_price?.toFixed(4)}</div>
           {record.selection_fee > 0 && (
-            <div className="text-orange-500 text-xs">筛选费: ${record.selection_fee.toFixed(4)}</div>
+            <div className="text-orange-500 text-xs">
+              {record.material_type === 'Whitelabel' ? '换标费' : '筛选费'}: ${record.selection_fee.toFixed(4)}
+            </div>
           )}
         </div>
       ),
@@ -504,13 +512,20 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
             noStyle 
             shouldUpdate={(prev, curr) => prev.material_type !== curr.material_type}
           >
-            {({ getFieldValue }) => 
-              getFieldValue('material_type') === 'DRAM' ? (
-                <Form.Item name="selection_fee" label="筛选费用 (单价加成 $)">
-                  <InputNumber style={{ width: '100%' }} min={0} step={0.0001} />
-                </Form.Item>
-              ) : null
-            }
+            {({ getFieldValue }) => {
+              const type = getFieldValue('material_type');
+              if (type === 'DRAM' || type === 'Whitelabel') {
+                return (
+                  <Form.Item 
+                    name="selection_fee" 
+                    label={type === 'Whitelabel' ? "改标费用 (单价加成 $)" : "筛选费用 (单价加成 $)"}
+                  >
+                    <InputNumber style={{ width: '100%' }} min={0} step={0.0001} />
+                  </Form.Item>
+                );
+              }
+              return null;
+            }}
           </Form.Item>
           <p className="text-gray-400 text-xs mt-[-10px]">注：DRAM 通常需要设置 7.5% (0.075) 的筛选损耗。</p>
         </Form>
