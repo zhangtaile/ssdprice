@@ -66,54 +66,27 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
         setIndirectRate(skuData.indirect_cost_rate);
       }
 
-      // 1. 获取所有 BOM 基础条目
-      const { data: items, error: itemsError } = await supabase.from('bom_items').select('*').eq('sku_id', skuId);
+      // 1. 获取所有 BOM 基础条目并关联物料信息 (使用 RPC 单次请求优化性能)
+      const { data: resolvedItems, error: itemsError } = await supabase.rpc('get_bom_with_materials', { p_sku_id: skuId });
       if (itemsError) throw itemsError;
       
-      if (items && items.length > 0) {
-        // 2. 按物料类型分组 ID
-        const groups: Record<string, string[]> = {};
-        items.forEach(item => {
-          if (!groups[item.material_type]) groups[item.material_type] = [];
-          groups[item.material_type].push(item.material_id);
-        });
-
-        // 3. 针对每种物料类型，发起一次批量查询 (最多 6 次查询)
-        const materialDataMap: Record<string, any> = {};
-        await Promise.all(Object.keys(groups).map(async (type) => {
-          const tableName = `materials_${type.toLowerCase()}`;
-          const selectFields = type === 'DRAM' ? 'id, pn, supplier, price, selection_fee' : 'id, pn, supplier, price';
-          const { data: materials } = await supabase
-            .from(tableName)
-            .select(selectFields as any)
-            .in('id', groups[type]);
+      if (resolvedItems && resolvedItems.length > 0) {
+        // 2. 组装最终数据并计算成本
+        const finalItems = resolvedItems.map((item: any) => {
+          const price = Number(item.material_price) || 0;
+          const sFee = Number(item.selection_fee) || 0;
           
-          materials?.forEach((m: any) => {
-            materialDataMap[`${type}_${m.id}`] = m;
-          });
-        }));
-
-        // 4. 组装最终数据并计算成本
-        const resolvedItems = items.map(item => {
-          const mat = materialDataMap[`${item.material_type}_${item.material_id}`];
-          const price = mat?.price || 0;
-          const sFee = item.selection_fee || 0;
-          
-          // 恢复全局逻辑：所有物料均应用其填写的损耗率
-          // 新公式: (单价 + 筛选费) * 用量 * (1 + 损耗)
+          // 成本核算公式: (单价 + 筛选费) * 用量 * (1 + 损耗)
           const item_cost = (price + sFee) * item.quantity * (1 + (item.selection_loss || 0));
 
           return {
             ...item,
-            material_pn: mat?.pn || 'Unknown',
-            material_name: mat?.supplier || 'Unknown',
             material_price: price,
-            material_selection_fee: mat?.selection_fee || 0,
             item_cost: item_cost
           };
         });
 
-        setBomItems(resolvedItems);
+        setBomItems(finalItems);
       } else {
         setBomItems([]);
       }
