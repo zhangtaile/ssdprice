@@ -85,7 +85,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
           const selectFields = type === 'DRAM' ? 'id, pn, supplier, price, selection_fee' : 'id, pn, supplier, price';
           const { data: materials } = await supabase
             .from(tableName)
-            .select(selectFields)
+            .select(selectFields as any)
             .in('id', groups[type]);
           
           materials?.forEach(m => {
@@ -138,7 +138,7 @@ export default function BOMConfigPage({ params }: { params: Promise<{ id: string
     }
     const tableName = `materials_${type.toLowerCase()}`;
     const selectFields = type === 'DRAM' ? 'id, pn, supplier, selection_fee' : 'id, pn, supplier';
-    const { data, error } = await supabase.from(tableName).select(selectFields);
+    const { data, error } = await supabase.from(tableName).select(selectFields as any);
     if (!error) {
       setMaterialOptions(data || []);
     }
