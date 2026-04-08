@@ -158,15 +158,37 @@ CREATE TABLE IF NOT EXISTS sku_cost_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_sku_cost_snapshots_snapshot_id ON sku_cost_snapshots(snapshot_id);
 
--- 5. 禁用所有表的 RLS (Row Level Security)
-ALTER TABLE materials_dram DISABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_nand DISABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_controller DISABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_pcba DISABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_housing DISABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_mva DISABLE ROW LEVEL SECURITY;
-ALTER TABLE materials_whitelabel DISABLE ROW LEVEL SECURITY;
-ALTER TABLE skus DISABLE ROW LEVEL SECURITY;
-ALTER TABLE bom_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE cost_snapshots DISABLE ROW LEVEL SECURITY;
-ALTER TABLE sku_cost_snapshots DISABLE ROW LEVEL SECURITY;
+-- 5. 启用所有业务表的 RLS，并保留当前 anon 前端的读写能力
+DO $$
+DECLARE
+    tbl TEXT;
+    public_tables TEXT[] := ARRAY[
+        'materials_dram',
+        'materials_nand',
+        'materials_controller',
+        'materials_pcba',
+        'materials_housing',
+        'materials_mva',
+        'materials_whitelabel',
+        'skus',
+        'bom_items',
+        'cost_snapshots',
+        'sku_cost_snapshots'
+    ];
+BEGIN
+    FOREACH tbl IN ARRAY public_tables LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tbl);
+
+        EXECUTE format('DROP POLICY IF EXISTS %I_select_anon ON public.%I', tbl, tbl);
+        EXECUTE format('CREATE POLICY %I_select_anon ON public.%I FOR SELECT TO anon USING (true)', tbl, tbl);
+
+        EXECUTE format('DROP POLICY IF EXISTS %I_insert_anon ON public.%I', tbl, tbl);
+        EXECUTE format('CREATE POLICY %I_insert_anon ON public.%I FOR INSERT TO anon WITH CHECK (true)', tbl, tbl);
+
+        EXECUTE format('DROP POLICY IF EXISTS %I_update_anon ON public.%I', tbl, tbl);
+        EXECUTE format('CREATE POLICY %I_update_anon ON public.%I FOR UPDATE TO anon USING (true) WITH CHECK (true)', tbl, tbl);
+
+        EXECUTE format('DROP POLICY IF EXISTS %I_delete_anon ON public.%I', tbl, tbl);
+        EXECUTE format('CREATE POLICY %I_delete_anon ON public.%I FOR DELETE TO anon USING (true)', tbl, tbl);
+    END LOOP;
+END $$;

@@ -80,8 +80,18 @@ ACCESS_PASSWORD="本地访问密码"
 2. `supabase/migrations/20260406013000_add_selection_fee.sql`
 3. `supabase/migrations/20260406020000_add_get_bom_with_materials_rpc.sql`
 4. `supabase/migrations/20260406030000_add_whitelabel_ssd.sql`
+5. `supabase/migrations/20260408000000_enable_rls_with_anon_policies.sql`
 
 否则 `BOM` 页面可能因缺少 `selection_fee` 字段或 `get_bom_with_materials` RPC 而无法正常工作。
+
+### 3.1 RLS 说明
+Supabase 会对暴露给 Data API 的 `public` 表检查是否启用了 RLS。本项目当前已经改为：
+- 对业务表启用 RLS
+- 对 `anon` 角色补齐 `SELECT / INSERT / UPDATE / DELETE` policy
+
+这是一种**最小改动兼容方案**：
+- 优点：消除 `RLS Disabled in Public` 安全告警，同时保持现有网页录入和管理功能可用
+- 限制：前端仍然直接使用 `anon key` 访问数据库，安全性只是从“未启用 RLS”提升到“已启用 RLS 但 anon 放行”
 
 ### 4. 安装与运行
 ```bash

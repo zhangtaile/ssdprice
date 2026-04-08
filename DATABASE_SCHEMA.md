@@ -89,5 +89,7 @@
 
 ## 5. 安全与约束
 
-- **RLS**: 已在所有表中禁用 (RLS Disabled)，简化开发阶段的读写。
+- **RLS**: 已在所有暴露给 Supabase Data API 的 `public` 表上启用。
+- **当前策略**: 为了兼容现有前端直接使用 `anon key` 的读写方式，当前阶段给 `anon` 角色配置了全表 `SELECT / INSERT / UPDATE / DELETE` policy。这能消除 Supabase 的 RLS 告警，但并不代表已经完成严格权限隔离。
+- **后续加固方向**: 若要真正提高安全性，应将敏感写操作迁移到服务端，或切换为 Supabase Auth 后按 `authenticated` 用户和角色收紧 policy。
 - **外键约束**: 所有 `sku_id` 和 `snapshot_id` 均配置了 `ON DELETE CASCADE`，删除 SKU 或快照将自动清理关联数据，保持数据库整洁。
