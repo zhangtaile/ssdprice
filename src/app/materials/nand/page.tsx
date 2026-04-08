@@ -250,7 +250,7 @@ export default function NandPage() {
                 }}
               />
             </Form.Item>
-            <Form.Item name="gb_price" label="单 Gb 价格 ($/GB)">
+            <Form.Item name="gb_price" label="单GB价格 ($/GB)">
               <InputNumber
                 style={{ width: '100%' }}
                 step={0.0001}
