@@ -47,22 +47,60 @@
 
 ## 🚀 快速开始 (Quick Start)
 
-### 1. 数据库初始化
-在 Supabase SQL Editor 中执行项目根目录下的 `full_database_init.sql`。
-
-### 2. 环境变量配置
-创建 `.env.local` 文件并配置以下内容：
-```env
-NEXT_PUBLIC_SUPABASE_URL="您的 Supabase 地址"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="您的 Supabase Key"
-ACCESS_PASSWORD="您的访问密码"
+### 1. Node.js 版本
+建议使用 **Node.js 20**。如果你使用 `nvm`：
+```bash
+nvm use
 ```
 
-### 3. 安装与运行
+### 2. 重新 clone 后恢复本地环境变量
+本仓库不会提交任何本地敏感文件，重新 clone 后请基于 `.env.example` 创建 `.env.local`：
+```bash
+cp .env.example .env.local
+```
+
+然后从你的线上环境恢复真实值：
+```env
+NEXT_PUBLIC_SUPABASE_URL="Supabase Project URL"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="Supabase anon public key"
+ACCESS_PASSWORD="本地访问密码"
+```
+
+恢复来源如下：
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase 控制台 `Project Settings -> API -> Project URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase 控制台 `Project Settings -> API -> Project API keys -> anon public`
+- `ACCESS_PASSWORD`: Vercel 控制台 `Project -> Settings -> Environment Variables`
+
+如果你的 Vercel 线上项目已经正常运行，**本地调试推荐直接复用线上 Supabase**，不需要重新初始化本地数据库。
+
+### 3. 首次搭建数据库时的初始化说明
+如果你是在新 Supabase 项目中首次部署本系统，不要只执行 `full_database_init.sql`。当前代码还依赖后续 migration 中的字段和 RPC，请按顺序执行：
+
+1. `full_database_init.sql`
+2. `supabase/migrations/20260406013000_add_selection_fee.sql`
+3. `supabase/migrations/20260406020000_add_get_bom_with_materials_rpc.sql`
+4. `supabase/migrations/20260406030000_add_whitelabel_ssd.sql`
+
+否则 `BOM` 页面可能因缺少 `selection_fee` 字段或 `get_bom_with_materials` RPC 而无法正常工作。
+
+### 4. 安装与运行
 ```bash
 npm install
 npm run dev
 ```
+
+默认访问地址：
+```text
+http://localhost:3000
+```
+
+系统会先跳转到 `/login`，输入 `.env.local` 中的 `ACCESS_PASSWORD` 后即可进入系统。
+
+### 5. 本地调试检查清单
+- 首页可以正常加载统计数据
+- `SKU 管理` 页面可以打开
+- `BOM` 配置页面可以正常加载物料明细
+- `成本快照` 页面可以读取历史记录
 
 ---
 

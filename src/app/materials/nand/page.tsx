@@ -17,6 +17,10 @@ interface NandMaterial {
   created_at: string;
 }
 
+type PriceField = 'price' | 'gb_price';
+
+const roundTo4 = (value: number) => Number(value.toFixed(4));
+
 export default function NandPage() {
   const { message, modal } = App.useApp();
   const [data, setData] = useState<NandMaterial[]>([]);
@@ -24,6 +28,7 @@ export default function NandPage() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [lastEditedField, setLastEditedField] = useState<PriceField>('price');
 
   const fetchData = async () => {
     setLoading(true);
@@ -44,30 +49,66 @@ export default function NandPage() {
     fetchData();
   }, []);
 
-  const [calculatedGbPrice, setCalculatedGbPrice] = useState<number | null>(null);
-
-  const calculateGbPrice = (values: any) => {
-    const { price, capacity } = values;
-    if (price && capacity && capacity > 0) {
-      setCalculatedGbPrice(price / (capacity / 8));
-    } else {
-      setCalculatedGbPrice(null);
+  const syncFromPrice = (price: number | null, capacityValue?: number | null) => {
+    const capacity = Number(capacityValue ?? form.getFieldValue('capacity'));
+    if (price === null || price === undefined) {
+      form.setFieldsValue({ price: null });
+      return;
     }
+
+    if (!capacity || capacity <= 0) {
+      form.setFieldsValue({ price });
+      return;
+    }
+
+    form.setFieldsValue({
+      price,
+      gb_price: roundTo4(price / (capacity / 8)),
+    });
   };
 
-  const handleValuesChange = (_: any, allValues: any) => {
-    calculateGbPrice(allValues);
+  const syncFromGbPrice = (gbPrice: number | null, capacityValue?: number | null) => {
+    const capacity = Number(capacityValue ?? form.getFieldValue('capacity'));
+    if (gbPrice === null || gbPrice === undefined) {
+      form.setFieldsValue({ gb_price: null });
+      return;
+    }
+
+    if (!capacity || capacity <= 0) {
+      form.setFieldsValue({ gb_price: gbPrice });
+      return;
+    }
+
+    form.setFieldsValue({
+      gb_price: gbPrice,
+      price: roundTo4(gbPrice * (capacity / 8)),
+    });
+  };
+
+  const handleCapacityChange = (capacity: number | null) => {
+    form.setFieldsValue({ capacity });
+
+    if (!capacity || capacity <= 0) {
+      return;
+    }
+
+    if (lastEditedField === 'gb_price') {
+      syncFromGbPrice(form.getFieldValue('gb_price'), capacity);
+      return;
+    }
+
+    syncFromPrice(form.getFieldValue('price'), capacity);
   };
 
   const showModal = (record?: NandMaterial) => {
     if (record) {
       setEditingId(record.id);
       form.setFieldsValue(record);
-      calculateGbPrice(record);
+      setLastEditedField('price');
     } else {
       setEditingId(null);
       form.resetFields();
-      setCalculatedGbPrice(null);
+      setLastEditedField('price');
     }
     setIsModalVisible(true);
   };
@@ -79,6 +120,7 @@ export default function NandPage() {
 
       const submitData = { ...values };
       // 数据库会自动处理 gb_price 虚拟列，我们不需要提交它
+      delete submitData.gb_price;
       
       if (editingId) {
         const { error } = await supabase
@@ -175,7 +217,6 @@ export default function NandPage() {
         <Form 
           form={form} 
           layout="vertical" 
-          onValuesChange={handleValuesChange}
         >
           <div className="grid grid-cols-2 gap-4">
             <Form.Item name="inventory_code" label="存货编码" rules={[{ required: true }]}>
@@ -191,21 +232,37 @@ export default function NandPage() {
               <Input placeholder="例如: x8" />
             </Form.Item>
             <Form.Item name="capacity" label="容量 (Gb)" rules={[{ required: true }]}>
-              <InputNumber style={{ width: '100%' }} placeholder="例如: 2048" />
+              <InputNumber
+                style={{ width: '100%' }}
+                placeholder="例如: 2048"
+                onChange={handleCapacityChange}
+              />
             </Form.Item>
             <Form.Item name="price" label="单颗价格 ($)" rules={[{ required: true }]}>
-              <InputNumber style={{ width: '100%' }} step={0.0001} min={0} />
+              <InputNumber
+                style={{ width: '100%' }}
+                step={0.0001}
+                precision={4}
+                min={0}
+                onChange={(value) => {
+                  setLastEditedField('price');
+                  syncFromPrice(value);
+                }}
+              />
+            </Form.Item>
+            <Form.Item name="gb_price" label="单 Gb 价格 ($/GB)">
+              <InputNumber
+                style={{ width: '100%' }}
+                step={0.0001}
+                precision={4}
+                min={0}
+                onChange={(value) => {
+                  setLastEditedField('gb_price');
+                  syncFromGbPrice(value);
+                }}
+              />
             </Form.Item>
           </div>
-          
-          {calculatedGbPrice !== null && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-              <span className="text-blue-600 font-medium">实时计算结果: </span>
-              <span className="text-blue-800 font-bold ml-2">
-                GB 单价 = ${calculatedGbPrice.toFixed(4)} / GB
-              </span>
-            </div>
-          )}
         </Form>
       </Modal>
     </div>
