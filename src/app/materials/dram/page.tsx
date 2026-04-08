@@ -59,18 +59,22 @@ export default function DramPage() {
     try {
       const values = await form.validateFields();
       setLoading(true);
+      const submitData = {
+        ...values,
+        selection_fee: values.selection_fee ?? 0,
+      };
 
       if (editingId) {
         const { error } = await supabase
           .from('materials_dram')
-          .update(values)
+          .update(submitData)
           .eq('id', editingId);
         if (error) throw error;
         message.success('更新成功');
       } else {
         const { error } = await supabase
           .from('materials_dram')
-          .insert([values]);
+          .insert([submitData]);
         if (error) throw error;
         message.success('添加成功');
       }
